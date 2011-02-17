@@ -177,13 +177,19 @@ if (!Function.prototype.bind) {
         // optimize common case
         if (arguments.length == 1) {
           var bound = function() {
-              return self.apply(this instanceof nop ? this : obj, arguments);
+              var useThis = self.prototype === undefined ?
+                                this instanceof arguments.callee :
+                                this instanceof nop;
+              return self.apply(useThis ? this : obj, arguments);
           };
         }
         else {
           var bound = function () {
+              var useThis = self.prototype === undefined ?
+                                this instanceof arguments.callee :
+                                this instanceof nop;
               return self.apply(
-                  this instanceof nop ? this : ( obj || {} ),
+                  useThis ? this : ( obj || {} ),
                   args.concat( slice.call(arguments) )
               );
           };
@@ -4833,68 +4839,66 @@ var Editor =function(renderer, session) {
         return (row >= this.getFirstVisibleRow() && row <= this.getLastVisibleRow());
     };
 
-    this.getVisibleRowCount = function() {
-        return this.getLastVisibleRow() - this.getFirstVisibleRow() + 1;
+    this.$getVisibleRowCount = function() {
+        return this.renderer.getScrollBottomRow() - this.renderer.getScrollTopRow() + 1;
     };
 
-    this.getPageDownRow = function() {
-        return this.renderer.getLastVisibleRow() - 1;
+    this.$getPageDownRow = function() {
+        return this.renderer.getScrollBottomRow();
     };
 
-    this.getPageUpRow = function() {
-        var firstRow = this.renderer.getFirstVisibleRow();
-        var lastRow = this.renderer.getLastVisibleRow();
+    this.$getPageUpRow = function() {
+        var firstRow = this.renderer.getScrollTopRow();
+        var lastRow = this.renderer.getScrollBottomRow();
 
-        return firstRow - (lastRow - firstRow) + 1;
+        return firstRow - (lastRow - firstRow);
     };
 
     this.selectPageDown = function() {
-        var row = this.getPageDownRow() + Math.floor(this.getVisibleRowCount() / 2);
+        var row = this.$getPageDownRow() + Math.floor(this.$getVisibleRowCount() / 2);
 
         this.scrollPageDown();
 
         var selection = this.getSelection();
-        selection.$moveSelection(function() {
-            selection.moveCursorTo(row, selection.getSelectionLead().column);
-        });
+        var leadScreenPos = this.session.documentToScreenPosition(selection.getSelectionLead());
+        var dest = this.session.screenToDocumentPosition(row, leadScreenPos.column);
+        selection.selectTo(dest.row, dest.column);
     };
 
     this.selectPageUp = function() {
-        var visibleRows = this.getLastVisibleRow() - this.getFirstVisibleRow();
-        var row = this.getPageUpRow() + Math.round(visibleRows / 2);
+        var visibleRows = this.renderer.getScrollTopRow() - this.renderer.getScrollBottomRow();
+        var row = this.$getPageUpRow() + Math.round(visibleRows / 2);
 
         this.scrollPageUp();
 
         var selection = this.getSelection();
-        selection.$moveSelection(function() {
-            selection.moveCursorTo(row, selection.getSelectionLead().column);
-        });
+        var leadScreenPos = this.session.documentToScreenPosition(selection.getSelectionLead());
+        var dest = this.session.screenToDocumentPosition(row, leadScreenPos.column);
+        selection.selectTo(dest.row, dest.column);
     };
 
     this.gotoPageDown = function() {
-        var row     = this.getPageDownRow(),
-            column  = Math.min(this.getCursorPosition().column,
-                               this.session.getLine(row).length);
+        var row = this.$getPageDownRow();
+        var column = this.getCursorPositionScreen().column;
 
         this.scrollToRow(row);
-        this.getSelection().moveCursorTo(row, column);
+        this.getSelection().moveCursorToScreen(row, column);
     };
 
     this.gotoPageUp = function() {
-       var  row     = this.getPageUpRow(),
-            column  = Math.min(this.getCursorPosition().column,
-                               this.session.getLine(row).length);
+        var row = this.$getPageUpRow();
+        var column = this.getCursorPositionScreen().column;
 
        this.scrollToRow(row);
-       this.getSelection().moveCursorTo(row, column);
+       this.getSelection().moveCursorToScreen(row, column);
     };
 
     this.scrollPageDown = function() {
-        this.scrollToRow(this.getPageDownRow());
+        this.scrollToRow(this.$getPageDownRow());
     };
 
     this.scrollPageUp = function() {
-        this.renderer.scrollToRow(this.getPageUpRow());
+        this.renderer.scrollToRow(this.$getPageUpRow());
     };
 
     this.scrollToRow = function(row) {
@@ -4914,6 +4918,10 @@ var Editor =function(renderer, session) {
     this.getCursorPosition = function() {
         return this.selection.getCursor();
     };
+
+    this.getCursorPositionScreen = function() {
+        return this.session.documentToScreenPosition(this.getCursorPosition());
+    }
 
     this.getSelectionRange = function() {
         return this.selection.getRange();
@@ -5592,19 +5600,69 @@ exports.setText = function(elem, text) {
     }
 };
 
-exports.hasCssClass = function(el, name) {
-    var classes = el.className.split(/\s+/g);
-    return classes.indexOf(name) !== -1;
-};
+if (!document.documentElement.classList) {
+    exports.hasCssClass = function(el, name) {
+        var classes = el.className.split(/\s+/g);
+        return classes.indexOf(name) !== -1;
+    };
 
-/**
-* Add a CSS class to the list of classes on the given node
-*/
-exports.addCssClass = function(el, name) {
-    if (!exports.hasCssClass(el, name)) {
-        el.className += " " + name;
-    }
-};
+    /**
+    * Add a CSS class to the list of classes on the given node
+    */
+    exports.addCssClass = function(el, name) {
+        if (!exports.hasCssClass(el, name)) {
+            el.className += " " + name;
+        }
+    };
+
+    /**
+    * Remove a CSS class from the list of classes on the given node
+    */
+    exports.removeCssClass = function(el, name) {
+        var classes = el.className.split(/\s+/g);
+        while (true) {
+            var index = classes.indexOf(name);
+            if (index == -1) {
+                break;
+            }
+            classes.splice(index, 1);
+        }
+        el.className = classes.join(" ");
+    };
+
+    exports.toggleCssClass = function(el, name) {
+        var classes = el.className.split(/\s+/g), add = true;
+        while (true) {
+            var index = classes.indexOf(name);
+            if (index == -1) {
+                break;
+            }
+            add = false;
+            classes.splice(index, 1);
+        }
+        if(add)
+            classes.push(name);
+
+        el.className = classes.join(" ");
+        return add;
+    };
+} else {
+    exports.hasCssClass = function(el, name) {
+        return el.classList.contains(name);
+    };
+
+    exports.addCssClass = function(el, name) {
+        el.classList.add(name);
+    };
+
+    exports.removeCssClass = function(el, name) {
+        el.classList.remove(name);
+    };
+
+    exports.toggleCssClass = function(el, name) {
+        return el.classList.toggle(name);
+    };
+}
 
 /**
  * Add or remove a CSS class from the list of classes on the given node
@@ -5618,23 +5676,8 @@ exports.setCssClass = function(node, className, include) {
     }
 };
 
-/**
-* Remove a CSS class from the list of classes on the given node
-*/
-exports.removeCssClass = function(el, name) {
-    var classes = el.className.split(/\s+/g);
-    while (true) {
-        var index = classes.indexOf(name);
-        if (index == -1) {
-            break;
-        }
-        classes.splice(index, 1);
-    }
-    el.className = classes.join(" ");
-};
-
 exports.importCssString = function(cssText, doc){
-    doc = doc || document;        
+    doc = doc || document;
 
     if (doc.createStyleSheet) {
         var sheet = doc.createStyleSheet();
@@ -5644,7 +5687,7 @@ exports.importCssString = function(cssText, doc){
         var style = doc.createElement("style");
         style.appendChild(doc.createTextNode(cssText));
         doc.getElementsByTagName("head")[0].appendChild(style);
-    }            
+    }
 };
 
 exports.getInnerWidth = function(element) {
@@ -5661,7 +5704,7 @@ if (window.pageYOffset !== undefined) {
     exports.getPageScrollTop = function() {
         return window.pageYOffset;
     };
-    
+
     exports.getPageScrollLeft = function() {
         return window.pageXOffset;
     };
@@ -5670,7 +5713,7 @@ else {
     exports.getPageScrollTop = function() {
         return document.body.scrollTop;
     };
-    
+
     exports.getPageScrollLeft = function() {
         return document.body.scrollLeft;
     };
@@ -5719,11 +5762,11 @@ exports.scrollbarWidth = function() {
 /**
  * Optimized set innerHTML. This is faster than plain innerHTML if the element
  * already contains a lot of child elements.
- * 
+ *
  * See http://blog.stevenlevithan.com/archives/faster-than-innerhtml for details
  */
 exports.setInnerHtml = function(el, innerHtml) {
-	var element = el.cloneNode(false);//document.createElement("div");
+    var element = el.cloneNode(false);//document.createElement("div");
     element.innerHTML = innerHtml;
     el.parentNode.replaceChild(element, el);
     return element;
@@ -5732,15 +5775,15 @@ exports.setInnerHtml = function(el, innerHtml) {
 exports.setInnerText = function(el, innerText) {
     if ("textContent" in document.body)
         el.textContent = innerText;
-    else 
+    else
         el.innerText = innerText;
-        
+
 };
 
 exports.getInnerText = function(el) {
     if ("textContent" in document.body)
         return el.textContent;
-    else 
+    else
          return el.innerText;
 };
 
@@ -5930,7 +5973,7 @@ var TextInput = function(parentNode, host) {
     event.addListener(text, "paste", function(e) {
         // Some browsers support the event.clipboardData API. Use this to get
         // the pasted content which increases speed if pasting a lot of lines.
-        if (e.clipboardData && e.clipboardData.getData) {
+        if (!(useragent.isWin && window.navigator.userAgent.indexOf("Qt/") >= 0) && e.clipboardData && e.clipboardData.getData) {
             sendText(e.clipboardData.getData("text/plain"));
             e.preventDefault();
         } else
@@ -7653,6 +7696,7 @@ var EditSession = function(text, mode) {
         var tabSize = this.getTabSize();
         var wrapData = this.$wrapData;
         var wrapLimit = this.$wrapLimit;
+        lastRow = Math.max(0, Math.min(lastRow, lines.length - 1));
 
         for (var row = firstRow; row <= lastRow; row++) {
             wrapData[row] =
@@ -8493,6 +8537,15 @@ var Selection = function(session) {
             this.$updateDesiredColumn(this.selectionLead.column);
     };
 
+    this.moveCursorToScreen = function(row, column, preventUpdateDesiredColumn) {
+        if (this.session.getUseWrapMode()) {
+            var pos = this.session.screenToDocumentPosition(row, column);
+            row = pos.row;
+            column = pos.column;
+        }
+        this.moveCursorTo(row, column, preventUpdateDesiredColumn);
+    };
+
 }).call(Selection.prototype);
 
 exports.Selection = Selection;
@@ -9209,7 +9262,7 @@ var Document = function(text) {
     };
   	
     this.getValue = function() {
-        return this.$lines.join(this.getNewLineCharacter());
+        return this.getAllLines().join(this.getNewLineCharacter());
     };
 
     // check for IE split bug
@@ -9265,11 +9318,11 @@ var Document = function(text) {
      * Get a verbatim copy of the given line as it is in the document
      */
     this.getLine = function(row) {
-        return this.$lines[row] || "";
+        return this.getLines(row, row + 1)[0] || "";
     };
 
     this.getLines = function(firstRow, lastRow) {
-        return this.$lines.slice(firstRow, lastRow+1);
+        return this.$lines.slice(firstRow, lastRow + 1);
     };
 
     /**
@@ -9277,7 +9330,7 @@ var Document = function(text) {
      * should not modify this array!
      */
     this.getAllLines = function() {
-        return this.$lines;
+        return this.getLines(0, this.getLength());
     };
 
     this.getLength = function() {
@@ -9325,14 +9378,35 @@ var Document = function(text) {
             var end = this.insertInLine(position, text);
         }
         else {
-            var end = this.insertInLine(position, newLines[0]);
-            this.insertNewLine(end);
-            if (newLines.length > 2)
-                this.insertLines(position.row+1, newLines.slice(1, newLines.length-1));
-
-            var end = this.insertInLine({row: position.row + newLines.length - 1, column: 0}, newLines[newLines.length-1]);
+            if (newLines[0].length > 0) {
+                var end = this.insertInLine(position, newLines[0]);
+                this.insertNewLine(end);
+            }
+            else if (position.row >= this.getLength()) {
+                // Edge case: inserting text that starts with a blank line
+                // into an empty document. If we don't do this, this.$lines[0]
+                // will be undefined and give us problems later.
+                this.insertNewLine(position);
+            }
+            // If we are inserting at the end of the document, we don't need to
+            // use insertInLine (concorde depends on this optimization!)
+            if (position.row + 1 == this.getLength()) {
+                this.insertLines(position.row + 1,
+                                 newLines.slice(1, newLines.length));
+                var end = {
+                    row: position.row + newLines.length - 1,
+                    column: position.column + newLines[newLines.length - 1].length
+                };
+            } else {
+                if (newLines.length > 2)
+                    this.insertLines(position.row + 1,
+                                     newLines.slice(1, newLines.length - 1));
+                var end = this.insertInLine({
+                    row: position.row + newLines.length - 1,
+                    column: 0
+                }, newLines[newLines.length - 1]);
+            }
         }
-
         return end;
     };
 
@@ -9420,7 +9494,7 @@ var Document = function(text) {
                 this.removeLines(firstFullRow, lastFullRow);
 
             if (firstFullRow != firstRow) {
-                this.removeInLine(firstRow, range.start.column, this.$lines[firstRow].length);
+                this.removeInLine(firstRow, range.start.column, this.getLine(firstRow).length);
                 this.removeNewLine(range.start.row);
             }
         }
@@ -10325,6 +10399,10 @@ var VirtualRenderer = function(container, theme) {
     this.$cursorLayer = new CursorLayer(this.content);
     this.$cursorPadding = 8;
 
+    // Indicates whether the horizontal scrollbar is visible
+    this.$horizScroll = true;
+    this.$horizScrollAlwaysVisible = true;
+
     this.scrollBar = new ScrollBar(container);
     this.scrollBar.addEventListener("scroll", this.onScroll.bind(this));
 
@@ -10435,7 +10513,7 @@ var VirtualRenderer = function(container, theme) {
             this.$size.height = height;
 
             this.scroller.style.height = height + "px";
-            this.scrollBar.setHeight(height);
+            this.scrollBar.setHeight(this.scroller.clientHeight);
 
             if (this.session) {
                 this.scrollToY(this.getScrollTop());
@@ -10597,6 +10675,14 @@ var VirtualRenderer = function(container, theme) {
         this.$updatePrintMargin();
     };
 
+    this.setHScrollBarAlwaysVisible = function(alwaysVisible) {
+        if (this.$horizScrollAlwaysVisible != alwaysVisible) {
+            this.$horizScrollAlwaysVisible = alwaysVisible;
+            if (!this.$horizScrollAlwaysVisible || !this.$horizScroll)
+                this.$loop.schedule(this.CHANGE_SCROLL);
+        }
+    }
+
     this.onScroll = function(e) {
         this.scrollToY(e.data);
     };
@@ -10682,6 +10768,12 @@ var VirtualRenderer = function(container, theme) {
         var longestLine = this.$getLongestLine();
         var widthChanged = !this.layerConfig ? true : (this.layerConfig.width != longestLine);
 
+        var horizScroll = this.$horizScrollAlwaysVisible || this.$size.scrollerWidth - longestLine < 0;
+        var horizScrollChanged = this.$horizScroll !== horizScroll;
+        this.$horizScroll = horizScroll;
+        if (horizScrollChanged)
+            this.scroller.style.overflowX = horizScroll ? "scroll" : "hidden";
+
         var lineCount = Math.ceil(minHeight / this.lineHeight) - 1;
         var firstRow = Math.max(0, Math.round((this.scrollTop - offset) / this.lineHeight));
         var lastRow = firstRow + lineCount;
@@ -10716,6 +10808,11 @@ var VirtualRenderer = function(container, theme) {
         this.content.style.marginTop = (-offset) + "px";
         this.content.style.width = longestLine + "px";
         this.content.style.height = minHeight + "px";
+
+        // Horizontal scrollbar visibility may have changed, which changes
+        // the client height of the scroller
+        if (horizScrollChanged)
+            this.onResize(true);
     };
 
     this.$updateLines = function() {
@@ -10833,6 +10930,10 @@ var VirtualRenderer = function(container, theme) {
     this.getScrollTopRow = function() {
         return this.scrollTop / this.lineHeight;
     };
+
+    this.getScrollBottomRow = function() {
+        return Math.max(0, Math.floor((this.scrollTop + this.$size.scrollerHeight) / this.lineHeight) - 1);
+    }
 
     this.scrollToRow = function(row) {
         this.scrollToY(row * this.lineHeight);
@@ -11834,7 +11935,7 @@ var ScrollBar = function(parent) {
     parent.appendChild(this.element);
 
     this.width = dom.scrollbarWidth();
-    this.element.style.width = this.width;
+    this.element.style.width = this.width + "px";
 
     event.addListener(this.element, "scroll", this.onScroll.bind(this));
 };
@@ -11851,7 +11952,7 @@ var ScrollBar = function(parent) {
     };
 
     this.setHeight = function(height) {
-        this.element.style.height = Math.max(0, height - this.width) + "px";
+        this.element.style.height = height + "px";
     };
 
     this.setInnerHeight = function(height) {
@@ -12085,6 +12186,7 @@ define("text!ace/css/editor.css", ".ace_editor {" +
   "}" +
   "" +
   ".ace_marker-layer {" +
+  "    cursor: text;" +
   "}" +
   "" +
   ".ace_marker-layer .ace_step {" +
@@ -12612,22 +12714,6 @@ define("text!styles.css", "html {" +
   "    top: 60px;" +
   "    left: 0px;" +
   "    background: white;" +
-  "}" +
-  "" +
-  ".cool {" +
-  "    position: absolute;" +
-  "    background: orange;" +
-  "    opacity: 0.8;" +
-  "}" +
-  "" +
-  ".cool_header {" +
-  "    position: absolute;" +
-  "    background: orange;" +
-  "    color: black;" +
-  "    font-size: 8px;" +
-  "    padding: 1px;" +
-  "    margin-top: -8px;" +
-  "    opacity: 0.8;" +
   "}" +
   "" +
   "#controls {" +
