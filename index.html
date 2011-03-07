@@ -14,15 +14,18 @@
       <td align="right">
         <label for="doc">Document:</label>
         <select id="doc" size="1">
-          <option value="js">JS Document</option>
+          <option value="js">JavaScript Document</option>
           <option value="html">HTML Document</option>
           <option value="css">CSS Document</option>
+          <option value="coffee">CoffeeScript Document</option>
           <option value="python">Python Document</option>
+          <option value="ruby">Ruby Document</option>
+          <option value="perl">Perl Document</option>
           <option value="php">PHP Document</option>
           <option value="java">Java Document</option>
-          <option value="ruby">Ruby Document</option>
+          <option value="csharp">C# Document</option>
           <option value="c_cpp">C++ Document</option>
-          <option value="coffee">CoffeeScript Document</option>
+          <option value="textile">Textile Document</option>
           <option value="plain">Text Document</option>
         </select>
       </td>
@@ -61,6 +64,10 @@
         <label for="show_hidden">Show Invisibles</label>
         <input type="checkbox" name="show_hidden" id="show_hidden">
       </td>
+      <td align="right">
+        <label for="show_hscroll">Persistent HScroll</label>
+        <input type="checkbox" name="show_hscroll" id="show_hscroll">
+      </td>
       <td align="right" rowspan="2">
         <img src="demo/logo.png">
       </td>
@@ -80,6 +87,9 @@
           <option value="ruby">Ruby</option>
           <option value="c_cpp">C/C++</option>
           <option value="coffee">CoffeeScript</option>
+          <option value="perl">Perl</option>
+          <option value="csharp">C-Sharp</option>
+          <option value="textile">Textile</option>
         </select>
       </td>
       <td align="right">
@@ -108,12 +118,19 @@
         <label for="show_print_margin">Show Print Margin</label>
         <input type="checkbox" id="show_print_margin" checked>
       </td>
+      <td align="right">
+        <label for="highlight_selected_word">Highlight selected word</label>
+        <input type="checkbox" id="highlight_selected_word" checked>
+      </td>
       </tr>
     </table>
 
     <div id="editor">
     </div>
-
+        <script type="text/editor" id="csharptext">public void HelloWorld() {
+   //Say Hello!
+   Console.WriteLine("Hello World");
+}</script>
     <script type="text/editor" id="jstext">function foo(items) {
     for (var i=0; i<items.length; i++) {
         alert(items[i] + "juhu");
@@ -146,16 +163,16 @@
 </html></script>
 
     <script type="text/editor" id="javatext">public class InfiniteLoop {
-        
+
     /*
      * This will cause the program to hang...
-     * 
+     *
      * Taken from:
      * http://www.exploringbinary.com/java-hangs-when-converting-2-2250738585072012e-308/
      */
     public static void main(String[] args) {
         double d = Double.parseDouble("2.2250738585072012e-308");
-          
+
         // unreachable code
         System.out.println("Value: " + d);
     }
@@ -215,7 +232,7 @@ At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergr
 </script>
 
     <script type="text/editor" id="rubytext">#!/usr/bin/ruby
-    
+
 # Program to find the factorial of a number
 def fact(n)
     if n == 0
@@ -265,6 +282,74 @@ do ->
     undefined
 
 var illegal</script>
+
+<script type="text/editor" id="perltext">
+#!/usr/bin/perl
+use strict;
+use warnings;
+my $num_primes = 0;
+my @primes;
+
+# Put 2 as the first prime so we won't have an empty array
+$primes[$num_primes] = 2;
+$num_primes++;
+
+MAIN_LOOP:
+for my $number_to_check (3 .. 200)
+{
+    for my $p (0 .. ($num_primes-1))
+    {
+        if ($number_to_check % $primes[$p] == 0)
+        {
+            next MAIN_LOOP;
+        }
+    }
+
+    # If we reached this point it means $number_to_check is not
+    # divisable by any prime number that came before it.
+    $primes[$num_primes] = $number_to_check;
+    $num_primes++;
+}
+
+for my $p (0 .. ($num_primes-1))
+{
+    print $primes[$p], ", ";
+}
+print "\n";
+
+</script>
+
+<script type="text/editor" id="textiletext">h1. Textile document
+
+h2. Heading Two
+
+h3. A two-line
+    header
+
+h2. Another two-line
+header
+
+Paragraph:
+one, two,
+thee lines!
+
+p(classone two three). This is a paragraph with classes
+
+p(#id). (one with an id)
+
+p(one two three#my_id). ..classes + id
+
+* Unordered list
+** sublist
+* back again!
+** sublist again..
+
+# ordered
+
+bg. Blockquote!
+    This is a two-list blockquote..!
+
+</script>
 
   <input id="cockpitInput" type="text"/>
 
