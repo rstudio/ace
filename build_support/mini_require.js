@@ -43,11 +43,6 @@
  
 (function() {
     
-if (window.require) {
-    require.packaged = true;
-    return;
-}
-    
 var _define = function(module, deps, payload) {
     if (typeof module !== 'string') {
         if (_define.original)
