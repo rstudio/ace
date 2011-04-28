@@ -186,7 +186,9 @@ var themes = {
     "mono_industrial": "monoindustrial",
     "clouds": "Clouds",
     "clouds_midnight": "Clouds Midnight",
-    "kr_theme": "krTheme"
+    "kr_theme": "krTheme",
+    "solarized": "Solarized (light)",
+    "solarized_dark" : "Solarized (dark)"
 }
 
 for (var name in themes) {
