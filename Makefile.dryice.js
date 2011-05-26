@@ -126,7 +126,8 @@ copy({
             project: project,
             require: [
                 "pilot/fixoldbrowsers",
-                "ace/ace"
+                "ace/ace",
+                "ace/mode/matching_brace_outdent"
             ]
         })
     ],
