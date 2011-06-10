@@ -49,6 +49,10 @@
   background: %selection%;
 }
 
+.%cssClass% .ace_marker-layer .ace_selected_word {
+  border: 1px solid %selected_word%;
+}
+
 .%cssClass% .ace_marker-layer .ace_step {
   background: %step%;
 }

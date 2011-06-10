@@ -98,6 +98,7 @@ function extractStyles(theme) {
         "overwrite": parseColor(globalSettings.caret),
         "gutter": "#e8e8e8",
         "selection": parseColor(globalSettings.selection),
+        "selected_word": parseColor(globalSettings.selection),
         "step": "rgb(198, 219, 174)",
         "bracket": parseColor(globalSettings.invisibles),
         "active_line": parseColor(globalSettings.lineHighlight),
