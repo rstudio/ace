@@ -37,12 +37,10 @@
 
 define(function(require, exports, module) {
 
-    var dom = require("pilot/dom");
+exports.isDark = %isDark%;
+exports.cssClass = "%cssClass%";
+exports.cssText = %css%;
 
-    var cssText = %css%;
-
-    // import CSS once
-    dom.importCssString(cssText);
-
-    exports.cssClass = "%cssClass%";
+    var dom = require("../lib/dom");
+    dom.importCssString(exports.cssText, exports.cssClass);
 });

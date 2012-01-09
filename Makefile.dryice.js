@@ -37,64 +37,52 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-var args = process.argv;
-var target = null;
-var targetDir = null;
-if (args.length == 3) {
-    target = args[2];
-    // Check if 'target' contains some allowed value.
-    if (target != "normal" && target != "bm") {
-        target = null;
-    }
-}
+var fs = require("fs");
+var copy = require('dryice').copy;
 
-if (!target) {
-    console.log("--- Ace Dryice Build Tool ---");
-    console.log("");
-    console.log("Options:");
-    console.log("  normal      Runs embedded build of Ace");
-    console.log("  bm          Runs bookmarklet build of Ace");
-    process.exit(0);
-} else {
-    if (target == "normal") {
-        targetDir = "build";
-    } else {
-        targetDir = "build/textarea";
-        function shadow(input) {
-            if (typeof input !== 'string') {
-                input = input.toString();
-            }
+var ACE_HOME = __dirname;
 
-            return input.replace(/define\(/g, "__ace_shadowed__.define(");
+function main(args) {
+    var target;
+    if (args.length == 3) {
+        target = args[2];
+        // Check if 'target' contains some allowed value.
+        if (target != "normal" && target != "bm" && target != "demo") {
+            target = null;
         }
     }
+    
+    if (!target) {
+        console.log("--- Ace Dryice Build Tool ---");
+        console.log("");
+        console.log("Options:");
+        console.log("  normal      Runs embedded build of Ace");
+        console.log("  demo      Runs demo build of Ace");
+        console.log("  bm          Runs bookmarklet build of Ace");
+        process.exit(0);
+    }
+    
+    var aceProject = {
+        roots: [
+            ACE_HOME + '/lib',
+            ACE_HOME + '/demo'
+        ],
+        textPluginPattern: /^ace\/requirejs\/text!/
+    };
+    
+    if (target == "normal") {
+        ace(aceProject);
+    }
+    else if (target == "demo") {
+        demo(aceProject);
+    }
+    else if (target == "bm") {
+        bookmarklet(aceProject);
+    }
 }
 
-console.log("using targetDir '", targetDir, "'");
-
-var copy = require('./support/dryice/lib/dryice').copy;
-
-var aceHome = __dirname;
-
-console.log('# ace ---------');
-
-var aceProject = [
-    aceHome + '/support/pilot/lib',
-    aceHome + '/support/cockpit/lib',
-    aceHome + '/lib',
-    aceHome
-];
-
-if (target == "normal") {
-    aceProject.push(aceHome + '/demo');
-
-    copy({
-        source: "build_support/editor.html",
-        dest:   targetDir + '/editor.html'
-    });
-    
-    demo();
-} else if(target == "bm") {
+function bookmarklet(aceProject) {
+    var targetDir = "build/textarea";
     copy({
         source: "build_support/editor_textarea.html",
         dest:   targetDir + '/editor.html'
@@ -103,317 +91,354 @@ if (target == "normal") {
         source: "build_support/style.css",
         dest:   targetDir + '/style.css'
     });
-}
-
-var project = copy.createCommonJsProject(aceProject);
-
-
-function filterTextPlugin(text) {
-    return text.replace(/(['"])text\!/g, "$1text/");
-    /*return text
-        .replace(/define\(\s*['"]text\!\)/g, "text/")
-        .replace(/require\(\s*['"]text\!\)/g, "text/")*/
-}
-
-var ace = copy.createDataObject();
-copy({
-    source: [
-        target == "normal"
-            ? 'build_support/mini_require.js'
-            : 'build_support/mini_require_textarea.js'
-    ],
-    dest: ace
-});
-copy({
-    source: [
-        copy.source.commonjs({
-            project: project,
-            require: [
-                "pilot/fixoldbrowsers",
-                "ace/ace"
-            ]
-        })
-    ],
-    filter: [ copy.filter.moduleDefines ],
-    dest: ace
-});
-copy({
-    source: {
-        root: project,
-        include: /.*\.css$/,
-        exclude: /tests?\//
-    },
-    filter: [ copy.filter.addDefines ],
-    dest: ace
-});
-copy({
-    source: [
-        target == "normal"
-            ? 'build_support/boot.js'
-            : 'build_support/boot_textarea.js'
-    ],
-    dest: ace
-});
-
-if (target == "normal") {
-    // Create the compressed and uncompressed output files
-    copy({
-        source: ace,
-        filter: [copy.filter.uglifyjs, filterTextPlugin],
-        dest:   targetDir + '/src/ace.js'
-    });
-    copy({
-        source: ace,
-        filter: [filterTextPlugin],
-        dest:   targetDir + '/src/ace-uncompressed.js'
-    });
-} else if (target == "bm") {
-    copy({
-        source: ace,
-        filter: [
-            shadow,
-            copy.filter.uglifyjs
-        ],
-        dest:   targetDir + '/src/ace.js'
-    });
-    copy({
-        source: ace,
-        filter: [
-            shadow
-        ],
-        dest:   targetDir + '/src/ace-uncompressed.js'
+    
+    buildAce(aceProject, {
+        targetDir: targetDir + "/src",
+        ns: "__ace_shadowed__",
+        exportModule: "ace/ext/textarea",
+        compress: false,
+        noconflict: true,
+        suffix: ".js",
+        compat: false,
+        name: "ace-bookmarklet",
+        workers: [],
+        keybindings: []
     });
 }
 
-var modeThemeFilters;
-if (target == "normal") {
-    modeThemeFilters = [
-        copy.filter.moduleDefines,
-        copy.filter.uglifyjs,
-        filterTextPlugin
-    ];
-} else if (target == "bm") {
-    modeThemeFilters = [
-        copy.filter.moduleDefines,
-        shadow,
-        copy.filter.uglifyjs
-    ]
+function ace(aceProject) {
+    console.log('# ace ---------');
+
+    // uncompressed
+    buildAce(aceProject, {
+        compress: false,
+        noconflict: false,
+        suffix: "-uncompressed.js",
+        compat: true,
+        name: "ace"
+    });
+    buildAce(aceProject, {
+        compress: false,
+        noconflict: true,
+        suffix: "-uncompressed-noconflict.js",
+        compat: true,
+        name: "ace",
+        workers: []
+    });
+    
+    // compressed
+    buildAce(aceProject, {
+        compress: true,
+        noconflict: false,
+        suffix: ".js",
+        compat: true,
+        name: "ace",
+        workers: []
+    });
+    buildAce(aceProject, {
+        compress: true,
+        noconflict: true,
+        suffix: "-noconflict.js",
+        compat: true,
+        name: "ace",
+        workers: []
+    });
+
+    console.log('# ace License | Readme | Changelog ---------');
+    
+    copy({
+        source: "build_support/editor.html",
+        dest:   "build/editor.html"
+    });
+    copy({
+        source: ACE_HOME + "/LICENSE",
+        dest:   "build/LICENSE"
+    });
+    copy({
+        source: ACE_HOME + "/Readme.md",
+        dest:   "build/Readme.md"
+    });
+    copy({
+        source: ACE_HOME + "/ChangeLog.txt",
+        dest:   "build/ChangeLog.txt"
+    });
 }
 
-console.log('# ace modes ---------');
-
-project.assumeAllFilesLoaded();
-[
-    "css", "html", "javascript", "php", "python", "xml", "ruby", "java", "c_cpp",
-    "coffee", "perl", "csharp", "svg", "clojure", "scss", "json", "groovy",
-    "ocaml", "scala", "textile", "scad"
-].forEach(function(mode) {
-    console.log("mode " + mode);
-    copy({
-        source: [
-            copy.source.commonjs({
-                project: project.clone(),
-                require: [ 'ace/mode/' + mode ]
-            })
-        ],
-        filter: modeThemeFilters,
-        dest:   targetDir + "/src/mode-" + mode + ".js"
-    });
-});
-
-console.log('# ace themes ---------');
-
-[
-    "clouds", "clouds_midnight", "cobalt", "crimson_editor", "dawn", "eclipse",
-    "idle_fingers", "kr_theme", "merbivore", "merbivore_soft",
-    "mono_industrial", "monokai", "pastel_on_dark", "solarized_dark",
-    "solarized_light", "textmate", "twilight", "vibrant_ink"
-].forEach(function(theme) {
-    copy({
-        source: [{
-            root: aceHome + '/lib',
-            include: "ace/theme/" + theme + ".js"
-        }],
-        filter: modeThemeFilters,
-        dest:   targetDir + "/src/theme-" + theme + ".js"
-    });
-});
-
-console.log('# ace License | Readme | Changelog ---------');
-
-copy({
-    source: aceHome + "/LICENSE",
-    dest:   targetDir + '/LICENSE'
-});
-copy({
-    source: aceHome + "/Readme.md",
-    dest:   targetDir + '/Readme.md'
-});
-copy({
-    source: aceHome + "/ChangeLog.txt",
-    dest:   targetDir + '/ChangeLog.txt'
-});
-
-// For the bookmarklet build, we are done.
-if (target == "bm") {
-    process.exit(0);
-}
-
-console.log('# ace worker ---------');
-
-["javascript", "coffee", "css"].forEach(function(mode) {
-    console.log("worker for " + mode + " mode");
-    var worker = copy.createDataObject();
-    var workerProject = copy.createCommonJsProject([
-        aceHome + '/support/pilot/lib',
-        aceHome + '/lib'
-    ]);
-    copy({
-        source: [
-            copy.source.commonjs({
-                project: workerProject,
-                require: [
-                    'pilot/fixoldbrowsers',
-                    'pilot/event_emitter',
-                    'pilot/oop',
-                    'ace/mode/' + mode + '_worker'
-                ]
-            })
-        ],
-        filter: [ copy.filter.moduleDefines],
-        dest: worker
-    });
-    copy({
-        source: [
-            aceHome + "/lib/ace/worker/worker.js",
-            worker
-        ],
-        filter: [ copy.filter.uglifyjs, filterTextPlugin ],
-        dest: "build/src/worker-" + mode + ".js"
-    });
-});
-
-console.log('# ace key bindings ---------');
-
-// copy key bindings
-project.assumeAllFilesLoaded();
-["vim", "emacs"].forEach(function(keybinding) {
-    copy({
-        source: [
-            copy.source.commonjs({
-                project: project.clone(),
-                require: [ 'ace/keyboard/keybinding/' + keybinding ]
-            })
-        ],
-        filter: [ copy.filter.moduleDefines, copy.filter.uglifyjs, filterTextPlugin ],
-        dest: "build/src/keybinding-" + keybinding + ".js"
-    });
-});
-
-console.log('# cockpit ---------');
-
-project.assumeAllFilesLoaded();
-
-var cockpit = copy.createDataObject();
-copy({
-    source: [
-        copy.source.commonjs({
-            project: project,
-            require: [ 'cockpit/index' ]
-        })
-    ],
-    filter: [ copy.filter.moduleDefines ],
-    dest: cockpit
-});
-copy({
-    source: {
-        root: aceHome + '/support/cockpit/lib',
-        include: /.*\.css$|.*\.html$/,
-        exclude: /tests?\//
-    },
-    filter: [ copy.filter.addDefines ],
-    dest: cockpit
-});
-copy({
-    source: {
-        root: aceHome + '/support/cockpit/lib',
-        include: /.*\.png$|.*\.gif$/,
-        exclude: /tests?\//
-    },
-    filter: [ copy.filter.base64 ],
-    dest: cockpit
-});
-
-// Create the compressed and uncompressed output files
-copy({
-    source: cockpit,
-    filter: copy.filter.uglifyjs,
-    dest: 'build/src/cockpit.js'
-});
-copy({
-    source: cockpit,
-    dest: 'build/src/cockpit-uncompressed.js'
-});
-
-function demo() {
+function demo(aceProject) {
     console.log('# kitchen sink ---------');
 
+    var version, ref;
+    try {
+        version = JSON.parse(fs.readFileSync(__dirname + "/package.json")).version;
+        ref = fs.readFileSync(__dirname + "/.git-ref").toString();
+    } catch(e) {
+        ref = "";
+        version = "";
+    }
+    
     copy({
-        source: "index.html",
+        source: "kitchen-sink.html",
         dest:   "build/kitchen-sink.html",
         filter: [ function(data) {
             return (data
                 .replace("DEVEL-->", "")
                 .replace("<!--DEVEL", "")
                 .replace("PACKAGE-->", "")
-                .replace("<!--PACKAGE", ""));
+                .replace("<!--PACKAGE", "")
+                .replace("%version%", version)
+                .replace("%commit%", ref)
+            );
         }]
     });
+    
+    buildAce(aceProject, {
+        targetDir: "build/demo/kitchen-sink",
+        ns: "ace",
+        requires: "kitchen-sink/demo",
+        compress: false,
+        noconflict: false,
+        compat: false,
+        name: "kitchen-sink",
+        suffix: "-uncompressed.js",
+        modes: [],
+        keybindings: []
+    });
+}
 
-    var project = copy.createCommonJsProject(aceProject);
-    var demo = copy.createDataObject();
-    copy({
-        source: [
-            'build_support/mini_require.js'
+function buildAce(aceProject, options) {
+    
+    var defaults = {
+        targetDir: __dirname + "/build/src",
+        ns: "ace",
+        exportModule: "ace/ace",
+        requires: null,
+        compress: false,
+        noconflict: false,
+        suffix: ".js",
+        name: "ace",
+        compat: true,
+        modes: [
+            "css", "html", "javascript", "php", "coldfusion", "python", "lua", "xml", "ruby", "java", "c_cpp",
+            "coffee", "perl", "csharp", "haxe", "svg", "clojure", "scss", "json", "groovy",
+            "ocaml", "scala", "textile", "scad", "markdown", "latex", "powershell", "sql", "pgsql"
         ],
-        dest: demo
+        themes: [
+            "chrome", "clouds", "clouds_midnight", "cobalt", "crimson_editor", "dawn", 
+            "dreamweaver", "eclipse",
+            "idle_fingers", "kr_theme", "merbivore", "merbivore_soft",
+            "mono_industrial", "monokai", "pastel_on_dark", "solarized_dark",
+            "solarized_light", "textmate", "tomorrow", "tomorrow_night",
+            "tomorrow_night_blue", "tomorrow_night_bright", "tomorrow_night_eighties",
+            "twilight", "vibrant_ink"
+        ],
+        workers: ["javascript", "coffee", "css"],
+        keybindings: ["vim", "emacs"]
+    };
+    
+    for(var key in defaults)
+        if (!options.hasOwnProperty(key))
+            options[key] = defaults[key];
+    
+    if (!options.requires)
+        options.requires = [options.exportModule];
+
+    var filters = [copy.filter.moduleDefines, filterTextPlugin];
+
+    if (options.noconflict) {
+        filters.push(namespace(options.ns));
+        if (options.exportModule)
+            filters.push(exportAce(options.ns, options.exportModule, options.ns));
+    } else if (options.exportModule) {
+        filters.push(exportAce(options.ns, options.exportModule));
+    }
+    
+    if (options.compress)
+        filters.push(copy.filter.uglifyjs);
+        
+    var suffix = options.suffix;
+    var targetDir = options.targetDir;
+    var name = options.name;
+    
+    var project = copy.createCommonJsProject(aceProject);
+    var ace = copy.createDataObject();
+    copy({
+        source: ["build_support/mini_require.js"],
+        dest: ace
     });
     copy({
         source: [
             copy.source.commonjs({
                 project: project,
-                require: [ "cockpit/index", "pilot/index", "ace/defaults", "demo/boot" ]
+                require: options.requires
             })
         ],
         filter: [ copy.filter.moduleDefines ],
-        dest: demo
+        dest: ace
     });
+    
     copy({
-        source: {
-            root: project,
-            include: /.*\.css$/,
-            exclude: /tests?\//
-        },
-        filter: [ copy.filter.addDefines ],
-        dest: demo
+        source: ace,
+        filter: filters,
+        dest:   targetDir + '/' + name + suffix
     });
-    copy({
-        source: {
-            root: aceHome + '/support/cockpit/lib',
-            include: /.*\.css$|.*\.html$/,
-            exclude: /tests?\//
-        },
-        filter: [ copy.filter.addDefines ],
-        dest: demo
-    });
+    
+    if (options.compat) {
+        project.assumeAllFilesLoaded();
+        copy({
+            source: [
+            copy.source.commonjs({
+                    project: cloneProject(project),
+                    require: [ "pilot/index" ]
+                })
+            ],
+            filter: filters,
+            dest:   targetDir + "/" + name + "-compat" + suffix
+        });
+    }
 
-    copy({
-        source: demo,
-        filter: copy.filter.uglifyjs,
-        dest: 'build/demo/kitchen-sink.js'
+    console.log('# ace modes ---------');
+    
+    project.assumeAllFilesLoaded();
+    options.modes.forEach(function(mode) {
+        console.log("mode " + mode);
+        copy({
+            source: [
+            copy.source.commonjs({
+                    project: cloneProject(project),
+                    require: [ 'ace/mode/' + mode ]
+                })
+            ],
+            filter: filters,
+            dest:   targetDir + "/mode-" + mode + suffix
+        });
     });
-    copy({
-        source: demo,
-        dest: 'build/demo/kitchen-sink-uncompressed.js'
+    
+    console.log('# ace themes ---------');
+    
+    options.themes.forEach(function(theme) {
+        console.log("theme " + theme);
+        copy({
+            source: [{
+                root: ACE_HOME + '/lib',
+                include: "ace/theme/" + theme + ".js"
+            }],
+            filter: filters,
+            dest:   targetDir + "/theme-" + theme + suffix
+        });
+    });
+    
+    console.log('# ace worker ---------');
+    
+    options.workers.forEach(function(mode) {
+        console.log("worker for " + mode + " mode");
+        var worker = copy.createDataObject();
+        var workerProject = copy.createCommonJsProject({
+            roots: [
+                ACE_HOME + '/lib'
+            ],
+            textPluginPattern: /^ace\/requirejs\/text!/
+        });
+        copy({
+            source: [
+                copy.source.commonjs({
+                    project: workerProject,
+                    require: [
+                        'ace/lib/fixoldbrowsers',
+                        'ace/lib/event_emitter',
+                        'ace/lib/oop',
+                        'ace/mode/' + mode + '_worker'
+                    ]
+                })
+            ],
+            filter: [ copy.filter.moduleDefines, filterTextPlugin ],
+            dest: worker
+        });
+        copy({
+            source: [
+                ACE_HOME + "/lib/ace/worker/worker.js",
+                worker
+            ],
+            filter: [ /* copy.filter.uglifyjs */],
+            dest: targetDir + "/worker-" + mode + ".js"
+        });
+    });
+    
+    console.log('# ace key bindings ---------');
+    
+    // copy key bindings
+    project.assumeAllFilesLoaded();
+    options.keybindings.forEach(function(keybinding) {
+        copy({
+            source: [
+            copy.source.commonjs({
+                    project: cloneProject(project),
+                    require: [ 'ace/keyboard/keybinding/' + keybinding ]
+                })
+            ],
+            filter: filters,
+            dest: "build/src/keybinding-" + keybinding + suffix
+        });
     });
 }
+
+// TODO: replace with project.clone once it is fixed in dryice
+function cloneProject(project) {
+    var clone = copy.createCommonJsProject({
+        roots: project.roots,
+        ignores: project.ignoreRequires
+    });
+
+    Object.keys(project.currentFiles).forEach(function(module) {
+        clone.currentFiles[module] = project.currentFiles[module];
+    });
+
+    Object.keys(project.ignoredFiles).forEach(function(module) {
+        clone.ignoredFiles[module] = project.ignoredFiles[module];
+    });
+
+    return clone;
+}
+
+function filterTextPlugin(text) {
+    return text.replace(/(['"])ace\/requirejs\/text\!/g, "$1text!");
+}
+
+function namespace(ns) {
+    return function(text) {
+        text = text
+            .toString()
+            .replace('var ACE_NAMESPACE = "";', 'var ACE_NAMESPACE = "' + ns +'";')
+            .replace(/\bdefine\(/g, ns + ".define(");
+        
+        return text;
+    };
+}
+
+function exportAce(ns, module, requireBase) {
+    requireBase = requireBase || "window";
+    module = module || "ace/ace";
+    return function(text) {
+        
+        var template = function() {
+            (function() {
+                REQUIRE_NS.require(["MODULE"], function(a) {
+                    if (!window.NS)
+                        window.NS = {};
+                    for (var key in a) if (a.hasOwnProperty(key))
+                        NS[key] = a[key];
+                });
+            })();
+        };
+        
+        return (text + ";" + template
+            .toString()
+            .replace(/MODULE/g, module)
+            .replace(/REQUIRE_NS/g, requireBase)
+            .replace(/NS/g, ns)
+            .slice(13, -1)
+        );
+    };
+}
+
+if (!module.parent)
+    main(process.argv);
