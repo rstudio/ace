@@ -1,3 +1,4 @@
+
 .%cssClass% .ace_editor {
   border: 2px solid rgb(159, 159, 159);
 }
@@ -7,19 +8,8 @@
 }
 
 .%cssClass% .ace_gutter {
-  width: 50px;
   background: #e8e8e8;
   color: #333;
-  overflow : hidden;
-}
-
-.%cssClass% .ace_gutter-layer {
-  width: 100%;
-  text-align: right;
-}
-
-.%cssClass% .ace_gutter-layer .ace_gutter-cell {
-  padding-right: 6px;
 }
 
 .%cssClass% .ace_print_margin {
@@ -32,7 +22,6 @@
 }
 
 .%cssClass% .ace_text-layer {
-  cursor: text;
   color: %foreground%;
 }
 
@@ -44,9 +33,14 @@
   border-left: 0px;
   border-bottom: 1px solid %overwrite%;
 }
- 
+
 .%cssClass% .ace_marker-layer .ace_selection {
   background: %selection%;
+}
+
+.%cssClass%.multiselect .ace_selection.start {
+  box-shadow: 0 0 3px 0px %background%;
+  border-radius: 2px;
 }
 
 .%cssClass% .ace_marker-layer .ace_step {
@@ -62,12 +56,19 @@
   background: %active_line%;
 }
 
-       
+.%cssClass% .ace_gutter_active_line {
+  background-color: %active_line%;
+}
+
+.%cssClass% .ace_marker-layer .ace_selected_word {
+  %selected_word_highlight%
+}
+
 .%cssClass% .ace_invisible {
   %invisible%
 }
 
-.%cssClass% .ace_keyword {
+.%cssClass% .ace_keyword, .%cssClass% .ace_meta {
   %keyword%
 }
 
@@ -75,7 +76,15 @@
   %keyword.operator%
 }
 
-.%cssClass% .ace_constant {
+.%cssClass% .ace_constant, .%cssClass% .ace_constant.ace_other {
+  %constant%
+}
+
+.%cssClass% .ace_constant.ace_character,  {
+  %constant%
+}
+
+.%cssClass% .ace_constant.ace_character.ace_escape,  {
   %constant%
 }
 
@@ -89,6 +98,10 @@
 
 .%cssClass% .ace_constant.ace_numeric {
   %constant.numeric%
+}
+
+.%cssClass% .ace_constant.ace_other {
+  %constant.other%
 }
 
 .%cssClass% .ace_invalid {
@@ -107,8 +120,33 @@
   %support%
 }
 
+.%cssClass% .ace_support.ace_constant {
+  %support.constant%
+}
+
+.%cssClass% .ace_fold {
+    background-color: %fold%;
+    border-color: %foreground%;
+}
+
 .%cssClass% .ace_support.ace_function {
   %support.function%
+}
+
+.%cssClass% .ace_storage {
+  %storage%
+}
+
+.%cssClass% .ace_storage.ace_type,  .%cssClass% .ace_support.ace_type{
+  %storage.type%
+}
+
+.%cssClass% .ace_variable {
+  %entity.name.function%
+}
+
+.%cssClass% .ace_variable.ace_parameter {
+  %variable.parameter%
 }
 
 .%cssClass% .ace_function.ace_buildin {
@@ -147,6 +185,66 @@
   %xml_pe%
 }
 
+.%cssClass% .ace_meta {
+  %meta%
+}
+
+.%cssClass% .ace_meta.ace_tag {
+  %meta.tag%
+}
+
+.%cssClass% .ace_meta.ace_tag.ace_input {
+  %ace.meta.tag.input%
+}
+
+.%cssClass% .ace_entity.ace_other.ace_attribute-name {
+  %entity.other.attribute-name%
+}
+
+.%cssClass% .ace_entity.ace_name {
+  %entity.name%
+}
+
+.%cssClass% .ace_entity.ace_name.ace_function {
+  %entity.name.function%
+}
+
+.%cssClass% .ace_markup.ace_underline {
+    text-decoration:underline;
+}
+
+.%cssClass% .ace_markup.ace_heading {
+  %markup.heading%
+}
+
+.%cssClass% .ace_markup.ace_heading.ace_1 {
+  %markup.heading.1%
+}
+
+.%cssClass% .ace_markup.ace_heading.ace_2 {
+  %markup.heading.2%
+}
+
+.%cssClass% .ace_markup.ace_heading.ace_3 {
+  %markup.heading.3%
+}
+
+.%cssClass% .ace_markup.ace_heading.ace_4 {
+  %markup.heading.4%
+}
+
+.%cssClass% .ace_markup.ace_heading.ace_5 {
+  %markup.heading.5%
+}
+
+.%cssClass% .ace_markup.ace_heading.ace_6 {
+  %markup.heading.6%
+}
+
+.%cssClass% .ace_markup.ace_list {
+  %markup.list%
+}
+
 .%cssClass% .ace_collab.ace_user1 {
-  %collab.user1%   
+  %collab.user1%
 }
