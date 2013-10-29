@@ -40,14 +40,15 @@
  * @param module a name for the payload
  * @param payload a function to call with (require, exports, module) params
  */
- 
+
 (function() {
-    
-if (window.require) {
-    require.packaged = true;
-    return;
-}
-    
+
+var ACE_NAMESPACE = "";
+
+var global = (function() {
+    return this;
+})();
+
 var _define = function(module, deps, payload) {
     if (typeof module !== 'string') {
         if (_define.original)
@@ -62,25 +63,20 @@ var _define = function(module, deps, payload) {
     if (arguments.length == 2)
         payload = deps;
 
-    if (!define.modules)
-        define.modules = {};
-        
-    define.modules[module] = payload;
-};
-if (window.define)
-    _define.original = window.define;
-    
-window.define = _define;
+    if (!_define.modules)
+        _define.modules = {};
 
+    _define.modules[module] = payload;
+};
 
 /**
  * Get at functionality define()ed using the function above
  */
-var _require = function(module, callback) {
+var _require = function(parentId, module, callback) {
     if (Object.prototype.toString.call(module) === "[object Array]") {
         var params = [];
         for (var i = 0, l = module.length; i < l; ++i) {
-            var dep = lookup(module[i]);
+            var dep = lookup(parentId, module[i]);
             if (!dep && _require.original)
                 return _require.original.apply(window, arguments);
             params.push(dep);
@@ -90,14 +86,14 @@ var _require = function(module, callback) {
         }
     }
     else if (typeof module === 'string') {
-        var payload = lookup(module);
+        var payload = lookup(parentId, module);
         if (!payload && _require.original)
             return _require.original.apply(window, arguments);
-        
+
         if (callback) {
             callback();
         }
-    
+
         return payload;
     }
     else {
@@ -106,32 +102,106 @@ var _require = function(module, callback) {
     }
 };
 
-if (window.require)
-    _require.original = window.require;
-    
-window.require = _require;
-require.packaged = true;
+var normalizeModule = function(parentId, moduleName) {
+    // normalize plugin requires
+    if (moduleName.indexOf("!") !== -1) {
+        var chunks = moduleName.split("!");
+        return normalizeModule(parentId, chunks[0]) + "!" + normalizeModule(parentId, chunks[1]);
+    }
+    // normalize relative requires
+    if (moduleName.charAt(0) == ".") {
+        var base = parentId.split("/").slice(0, -1).join("/");
+        moduleName = base + "/" + moduleName;
+
+        while(moduleName.indexOf(".") !== -1 && previous != moduleName) {
+            var previous = moduleName;
+            moduleName = moduleName.replace(/\/\.\//, "/").replace(/[^\/]+\/\.\.\//, "");
+        }
+    }
+
+    return moduleName;
+};
 
 /**
  * Internal function to lookup moduleNames and resolve them by calling the
  * definition function if needed.
  */
-var lookup = function(moduleName) {
-    var module = define.modules[moduleName];
-    if (module == null) {
-        console.error('Missing module: ' + moduleName);
+var lookup = function(parentId, moduleName) {
+
+    moduleName = normalizeModule(parentId, moduleName);
+
+    var module = _define.modules[moduleName];
+    if (!module) {
         return null;
     }
 
     if (typeof module === 'function') {
         var exports = {};
-        module(require, exports, { id: moduleName, uri: '' });
+        var mod = {
+            id: moduleName,
+            uri: '',
+            exports: exports,
+            packaged: true
+        };
+
+        var req = function(module, callback) {
+            return _require(moduleName, module, callback);
+        };
+
+        var returnValue = module(req, exports, mod);
+        exports = returnValue || mod.exports;
+
         // cache the resulting module object for next time
-        define.modules[moduleName] = exports;
+        _define.modules[moduleName] = exports;
         return exports;
     }
 
     return module;
 };
+
+function exportAce(ns) {
+
+    if (typeof requirejs !== "undefined") {
+
+        var define = global.define;
+        global.define = function(id, deps, callback) {
+            if (typeof callback !== "function")
+                return define.apply(this, arguments);
+
+            return define(id, deps, function(require, exports, module) {
+                if (deps[2] == "module")
+                    module.packaged = true;
+                return callback.apply(this, arguments);
+            });
+        };
+        global.define.packaged = true;
+
+        return;
+    }
+
+    var require = function(module, callback) {
+        return _require("", module, callback);
+    };
+    require.packaged = true;
+
+    var root = global;
+    if (ns) {
+        if (!global[ns])
+            global[ns] = {};
+        root = global[ns];
+    }
+
+    if (root.define)
+        _define.original = root.define;
+
+    root.define = _define;
+
+    if (root.require)
+        _require.original = root.require;
+
+    root.require = require;
+}
+
+exportAce(ACE_NAMESPACE);
 
 })();
